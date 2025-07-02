@@ -26,6 +26,7 @@ app.use('/api/admins', require('./routes/admins'));
 app.use('/api/organizations', require('./routes/organizations'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/connect', require('./routes/EmployeeConnect'));
+app.use('/api/employees', require('./routes/employees'));
 
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
