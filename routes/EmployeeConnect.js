@@ -8,7 +8,9 @@ router.post('/verify', async (req, res) => {
   const { connectCode, deviceId } = req.body;
 
   try {
-    const employee = await Employee.findOne({ connectCode });
+    const normalizedCode = connectCode.trim().toUpperCase();
+
+    const employee = await Employee.findOne({ connectCode: normalizedCode });
 
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Invalid connect code' });
@@ -23,5 +25,4 @@ router.post('/verify', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
 module.exports = router;
