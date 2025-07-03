@@ -13,7 +13,7 @@ function getCallType(type) {
   }
 }
 
-// POST: Save new logs with deduplication (optimized)
+// ✅ POST: Save new logs with deduplication
 router.post('/', async (req, res) => {
   try {
     const logs = req.body.logs || [];
@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET: Retrieve logs with filters
+// ✅ GET: Retrieve logs with filters
 router.get('/', async (req, res) => {
   try {
     const { from, to, callType, deviceId, location, clientNumber } = req.query;
@@ -98,6 +98,28 @@ router.get('/', async (req, res) => {
     res.json(logs);
   } catch (err) {
     console.error('❌ Error fetching logs:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ✅ PUT: Update status (remark/note) of a call log
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!status || typeof status !== 'string') {
+    return res.status(400).json({ success: false, message: 'Invalid status value' });
+  }
+
+  try {
+    const updated = await CallLog.findByIdAndUpdate(id, { status }, { new: true });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Call log not found' });
+    }
+
+    res.json({ success: true, message: 'Status updated', data: updated });
+  } catch (err) {
+    console.error('❌ Error updating status:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
