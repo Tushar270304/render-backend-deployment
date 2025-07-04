@@ -3,22 +3,23 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const Admin = require('../models/Admin');
 
-// Register Admin
+// ✅ Register Admin
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, organizationId } = req.body;
+
+    console.log('📥 Registration Attempt:', { name, email, password });
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
 
     const exists = await Admin.findOne({ email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const adminData = {
-      name,
-      email,
-      password: hashedPassword,
-    };
-
+    const adminData = { name, email, password: hashedPassword };
     if (organizationId && organizationId.length === 24) {
       adminData.organizationId = organizationId;
     }
@@ -33,6 +34,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// ✅ Login Admin
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -60,6 +62,5 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
 
 module.exports = router;
