@@ -6,20 +6,27 @@ const Admin = require('../models/Admin');
 // ✅ Register Admin
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, organizationId } = req.body;
+    let { name, email, password, organizationId } = req.body;
 
-    console.log('📥 Registration Attempt:', { name, email, password });
-
-    if (!password || password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
+    // Trim inputs
+    name = name?.trim();
+    email = email?.trim().toLowerCase();
+    password = password?.trim();
 
     const exists = await Admin.findOne({ email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('📥 Registration password (before hashing):', JSON.stringify(password));
 
-    const adminData = { name, email, password: hashedPassword };
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('📦 Hashed password:', hashedPassword);
+
+    const adminData = {
+      name,
+      email,
+      password: hashedPassword,
+    };
+
     if (organizationId && organizationId.length === 24) {
       adminData.organizationId = organizationId;
     }
@@ -37,7 +44,10 @@ router.post('/register', async (req, res) => {
 // ✅ Login Admin
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    email = email?.trim().toLowerCase();
+    password = password?.trim();
 
     const admin = await Admin.findOne({ email });
     if (!admin) {
@@ -46,7 +56,7 @@ router.post('/login', async (req, res) => {
     }
 
     console.log('👉 Login Attempt:', email);
-    console.log('👉 Plain password:', password);
+    console.log('👉 Plain password:', JSON.stringify(password));
     console.log('👉 Hashed in DB:', admin.password);
 
     const isMatch = await bcrypt.compare(password, admin.password);
