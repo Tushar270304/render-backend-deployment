@@ -1,14 +1,13 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const router = express.Router();
-const Admin = require('../models/Admin');
+const Admin = require('../models/Admin'); // Mongoose model with pre-save hook
 
-// ✅ Register Admin
+// ✅ Register Admin (no manual hashing)
 router.post('/register', async (req, res) => {
   try {
     let { name, email, password, organizationId } = req.body;
 
-    // Trim inputs
+    // Normalize inputs
     name = name?.trim();
     email = email?.trim().toLowerCase();
     password = password?.trim();
@@ -16,15 +15,11 @@ router.post('/register', async (req, res) => {
     const exists = await Admin.findOne({ email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
-    console.log('📥 Registration password (before hashing):', JSON.stringify(password));
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('📦 Hashed password:', hashedPassword);
-
+    // 🔥 DO NOT HASH PASSWORD HERE — mongoose schema will do it
     const adminData = {
       name,
       email,
-      password: hashedPassword,
+      password, // send plain text, schema will hash it
     };
 
     if (organizationId && organizationId.length === 24) {
@@ -34,6 +29,9 @@ router.post('/register', async (req, res) => {
     const newAdmin = new Admin(adminData);
     await newAdmin.save();
 
+    console.log('📥 Registration password (before hashing):', JSON.stringify(password));
+    console.log('📦 Hashed password (after save):', newAdmin.password);
+
     res.json({ success: true, message: 'Admin registered successfully' });
   } catch (err) {
     console.error('❌ Error registering admin:', err);
@@ -42,6 +40,7 @@ router.post('/register', async (req, res) => {
 });
 
 // ✅ Login Admin
+const bcrypt = require('bcryptjs'); // only needed here
 router.post('/login', async (req, res) => {
   try {
     let { email, password } = req.body;
