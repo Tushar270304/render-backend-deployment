@@ -5,6 +5,7 @@ const Employee = require('../models/Employee');
 
 // POST: Connect device using connect code
 router.post('/verify', async (req, res) => {
+  
   const { connectCode, deviceId } = req.body;
 
   try {
@@ -25,4 +26,5 @@ router.post('/verify', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 module.exports = router;

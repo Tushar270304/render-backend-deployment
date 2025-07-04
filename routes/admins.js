@@ -33,17 +33,23 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ✅ Login Admin
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const admin = await Admin.findOne({ email });
     if (!admin) {
+      console.log('❌ Admin not found');
       return res.status(404).json({ success: false, message: 'Admin not found' });
     }
 
+    console.log('👉 Login Attempt:', email);
+    console.log('👉 Plain password:', password);
+    console.log('👉 Hashed in DB:', admin.password);
+
     const isMatch = await bcrypt.compare(password, admin.password);
+    console.log('✅ Match:', isMatch);
+
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid password' });
     }
@@ -54,5 +60,6 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 module.exports = router;

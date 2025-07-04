@@ -12,12 +12,13 @@ function generateConnectCode(length = 6) {
 }
 
 // POST: Create employee
+// POST: Create employee
 router.post('/add', async (req, res) => {
-  const { name, phone } = req.body;
+  const { name, phone, tags } = req.body;
 
   try {
     const connectCode = generateConnectCode();
-    const employee = new Employee({ name, phone, connectCode });
+    const employee = new Employee({ name, phone, connectCode, tags });
 
     await employee.save();
     res.json({ success: true, employee });

@@ -1,11 +1,14 @@
-// models/Employee.js
 const mongoose = require('mongoose');
 
-const employeeSchema = new mongoose.Schema({
-  name: String,
-  phone: String,
-  connectCode: { type: String, unique: true },
-  deviceId: String, // this will be set after connect
-});
+const employeeSchema = new mongoose.Schema(
+  {
+    name: String,
+    phone: String,
+    connectCode: { type: String, unique: true },
+    deviceId: String,
+    tags: [String], // 🆕 tags array
+  },
+  { timestamps: true } // ⏱ adds createdAt and updatedAt
+);
 
 module.exports = mongoose.model('Employee', employeeSchema);
