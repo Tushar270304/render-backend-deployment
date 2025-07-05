@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Employee = require('../models/Employee');
-const auth = require('../middleware/auth'); // ✅ Import auth
+const auth = require('../middleware/auth');
 
-// 🔁 Safe connect code generator with uniqueness check
+// 🔁 Unique connect code generator
 async function generateUniqueConnectCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -23,8 +23,6 @@ async function generateUniqueConnectCode(length = 6) {
 // ✅ POST: Create employee
 router.post('/add', auth, async (req, res) => {
   const { name, phone, tags } = req.body;
-
-  console.log('📥 Add employee request body:', req.body);
 
   if (!name || !phone) {
     return res.status(400).json({ success: false, message: 'Name and phone are required' });
@@ -52,6 +50,24 @@ router.get('/', auth, async (req, res) => {
   } catch (err) {
     console.error('❌ Fetch employees error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to fetch employees', error: err.message });
+  }
+});
+
+// ✅ DELETE: Remove employee by ID
+router.delete('/:id', auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const deleted = await Employee.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    console.log(`🗑️ Deleted employee: ${deleted.name} (${deleted._id})`);
+    res.json({ success: true, message: 'Employee deleted' });
+  } catch (err) {
+    console.error('❌ Delete employee error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to delete employee', error: err.message });
   }
 });
 
