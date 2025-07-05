@@ -1,37 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const CallLog = require('../models/CallLog');
-const auth = require('../middlewares/auth'); // ✅ Import auth
-// 🔐 GET: Retrieve logs (protected)
-router.get('/', auth, async (req, res) => {
-  try {
-    const { from, to, callType, deviceId, location, clientNumber } = req.query;
-    const query = {};
-
-    if (from || to) {
-      query.timestamp = {};
-      if (from) query.timestamp.$gte = new Date(from);
-      if (to) {
-        const toDate = new Date(to);
-        toDate.setHours(23, 59, 59, 999);
-        query.timestamp.$lte = toDate;
-      }
-    }
-
-    if (callType) query.callType = callType.toUpperCase();
-    if (deviceId) query.deviceId = deviceId;
-    if (location) query.location = location;
-    if (clientNumber) {
-      query.clientNumber = { $regex: clientNumber, $options: 'i' };
-    }
-
-    const logs = await CallLog.find(query).sort({ timestamp: -1 });
-    res.json(logs);
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
+const auth = require('../middleware/auth'); // ✅ Import auth
 // Helper: Convert numeric type to string
 function getCallType(type) {
   switch (type) {
@@ -102,7 +72,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // ✅ GET: Retrieve logs with filters
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { from, to, callType, deviceId, location, clientNumber } = req.query;
     const query = {};

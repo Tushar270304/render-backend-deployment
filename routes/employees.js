@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Employee = require('../models/Employee');
-const auth = require('../middlewares/auth'); // ✅ Import auth
+const auth = require('../middleware/auth'); // ✅ Import auth
 
 
 function generateConnectCode(length = 6) {
