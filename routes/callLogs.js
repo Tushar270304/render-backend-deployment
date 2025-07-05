@@ -74,7 +74,18 @@ router.post('/', auth, async (req, res) => {
 // ✅ GET: Retrieve logs with filters
 router.get('/', auth, async (req, res) => {
   try {
-    const { from, to, callType, deviceId, location, clientNumber } = req.query;
+    const {
+      from,
+      to,
+      callType,
+      callTypes, // expects comma-separated values like "INCOMING,OUTGOING"
+      deviceId,
+      location,
+      clientNumber,
+      page = 1,
+      limit = 100
+    } = req.query;
+
     const query = {};
 
     if (from || to) {
@@ -88,19 +99,31 @@ router.get('/', auth, async (req, res) => {
     }
 
     if (callType) query.callType = callType.toUpperCase();
+    if (callTypes) {
+      const typesArray = callTypes.split(',').map(t => t.trim().toUpperCase());
+      query.callType = { $in: typesArray };
+    }
+
     if (deviceId) query.deviceId = deviceId;
     if (location) query.location = location;
     if (clientNumber) {
       query.clientNumber = { $regex: clientNumber, $options: 'i' };
     }
 
-    const logs = await CallLog.find(query).sort({ timestamp: -1 });
-    res.json(logs);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await CallLog.countDocuments(query);
+    const logs = await CallLog.find(query)
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.json({ success: true, total, logs });
   } catch (err) {
     console.error('❌ Error fetching logs:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 // ✅ PUT: Update status (remark/note) of a call log
 router.put('/:id', auth, async (req, res) => {
