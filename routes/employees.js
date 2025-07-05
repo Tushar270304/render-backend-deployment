@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Employee = require('../models/Employee');
+const auth = require('../middlewares/auth'); // ✅ Import auth
+
 
 function generateConnectCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -13,7 +15,7 @@ function generateConnectCode(length = 6) {
 
 // POST: Create employee
 // POST: Create employee
-router.post('/add', async (req, res) => {
+router.post('/add', auth, async (req, res) => {
   const { name, phone, tags } = req.body;
 
   try {
@@ -29,7 +31,7 @@ router.post('/add', async (req, res) => {
 });
 
 // GET: All employees
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   const employees = await Employee.find().sort({ name: 1 });
   res.json(employees);
 });
