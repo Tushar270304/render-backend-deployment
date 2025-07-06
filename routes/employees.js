@@ -3,7 +3,7 @@ const router = express.Router();
 const Employee = require('../models/Employee');
 const auth = require('../middleware/auth');
 
-// 🔁 Unique connect code generator
+//  Unique connect code generator
 async function generateUniqueConnectCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';

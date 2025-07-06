@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const Employee = require('../models/Employee');
 
-// ✅ POST: Connect device using connect code
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ✅ POST: Connect device using connect code and return token
 router.post('/verify', async (req, res) => {
   const { connectCode, deviceId } = req.body;
 
@@ -23,8 +26,17 @@ router.post('/verify', async (req, res) => {
     employee.deviceId = deviceId;
     await employee.save();
 
+    // ✅ Generate JWT token for this employee
+    const token = jwt.sign(
+      { employeeId: employee._id, deviceId: employee.deviceId },
+      JWT_SECRET,
+      { expiresIn: '30d' } // optional expiry
+    );
+
     console.log('🔗 Device connected to employee:', employee._id);
-    res.json({ success: true, message: 'Device connected', employee });
+
+    // ✅ Send token back to client
+    res.json({ success: true, message: 'Device connected', employee, token });
   } catch (err) {
     console.error('❌ Connect error:', err.message);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
