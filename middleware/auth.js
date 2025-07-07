@@ -1,22 +1,27 @@
-const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET;
+const jwt = require("jsonwebtoken");
 
 const auth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+  const apiKey = req.headers["x-api-key"];
+  const token = req.headers.authorization?.split(" ")[1];
+  const validApiKey = process.env.REACT_APP_API_KEY;
+  const jwtSecret = process.env.JWT_SECRET;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'No token provided or format is wrong' });
+  if (apiKey && apiKey === validApiKey) {
+    req.user = { role: "web" };
+    return next();
   }
 
-  const token = authHeader.split(' ')[1];
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.admin = decoded;
-    next();
-  } catch (err) {
-    console.error('❌ Invalid token:', err.message);
-    res.status(401).json({ message: 'Invalid token' });
+  if (token) {
+    jwt.verify(token, jwtSecret, (err, decoded) => {
+      if (err)
+        return res
+          .status(403)
+          .json({ success: false, message: "Invalid token" });
+      req.user = decoded;
+      return next();
+    });
+  } else {
+    return res.status(403).json({ success: false, message: "Unauthorized" });
   }
 };
 
