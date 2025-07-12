@@ -2,7 +2,10 @@ const express = require("express");
 const router = express.Router();
 const CallLog = require("../models/CallLog");
 const auth = require("../middleware/auth");
+const AWS = require("aws-sdk");
+require("dotenv").config();
 
+// Helper: Convert numeric type to string
 function getCallType(type) {
   switch (type) {
     case 1:
@@ -76,6 +79,7 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
+// ✅ GET: Retrieve logs with filters
 router.get("/", auth, async (req, res) => {
   try {
     const {
@@ -133,6 +137,7 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+// ✅ PUT: Update status (remark/note) of a call log
 router.put("/:id", auth, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -159,6 +164,38 @@ router.put("/:id", auth, async (req, res) => {
   } catch (err) {
     console.error("❌ Error updating status:", err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// Generate pre-signed URL for S3 upload
+router.get("/generate-upload-url", async (req, res) => {
+  try {
+    const { filename } = req.query;
+
+    if (!filename) {
+      return res.status(400).json({ error: "Missing filename in query" });
+    }
+
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.AWS_REGION,
+      signatureVersion: "v4",
+    });
+
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: `mobile_recordings/${filename}`,
+      Expires: 120,
+      ContentType: "audio/mpeg", // or 'audio/3gpp', based on your recordings
+    };
+
+    const uploadURL = await s3.getSignedUrlPromise("putObject", params);
+
+    res.json({ uploadURL });
+  } catch (err) {
+    console.error("Error generating signed URL:", err);
+    res.status(500).json({ error: "Failed to generate signed URL" });
   }
 });
 
