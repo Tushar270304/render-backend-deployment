@@ -199,4 +199,48 @@ router.get("/generate-upload-url", async (req, res) => {
   }
 });
 
+// ✅ PUT: Update status of most recent log for given deviceId and clientNumber
+router.put("/update-latest", async (req, res) => {
+  try {
+    const { deviceId, clientNumber, status } = req.body;
+
+    if (!deviceId || !clientNumber || !status) {
+      return res.status(400).json({
+        success: false,
+        message: "deviceId, clientNumber, and status are required",
+      });
+    }
+
+    // Normalize number (last 10 digits)
+    const normalizedNumber = clientNumber.replace(/\D/g, "").slice(-10);
+
+    // Find the most recent matching log
+    const latestLog = await CallLog.findOne({
+      deviceId,
+      clientNumber: { $regex: normalizedNumber, $options: "i" },
+    })
+      .sort({ timestamp: -1 });
+
+    if (!latestLog) {
+      return res.status(404).json({
+        success: false,
+        message: "No matching log found",
+      });
+    }
+
+    latestLog.status = status;
+    await latestLog.save();
+
+    res.json({
+      success: true,
+      message: "Status updated for most recent log",
+      data: latestLog,
+    });
+  } catch (err) {
+    console.error("❌ Error updating latest status:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 module.exports = router;
