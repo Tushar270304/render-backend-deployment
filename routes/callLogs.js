@@ -242,5 +242,36 @@ router.put("/update-latest", async (req, res) => {
   }
 });
 
+router.get("/get-recording-url", auth, async (req, res) => {
+  try {
+    const { filename } = req.query;
+
+    if (!filename) {
+      return res.status(400).json({ success: false, message: "Missing filename" });
+    }
+
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.AWS_REGION,
+      signatureVersion: "v4",
+    });
+
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: `mobile_recordings/${filename}`,
+      Expires: 60 * 5, // valid for 5 minutes
+    };
+
+    const url = await s3.getSignedUrlPromise("getObject", params);
+
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error("❌ Error generating download URL:", err);
+    res.status(500).json({ success: false, message: "Failed to generate recording URL" });
+  }
+});
+
+
 
 module.exports = router;
