@@ -288,7 +288,7 @@ router.get("/get-recordings-by-number", auth, async (req, res) => {
     });
 
     const prefix = `mobile_recordings/`;
-    const normalizedNumber = number.replace(/\D/g, '').slice(-10); // Extract last 10 digits
+    const normalizedNumber = number.replace(/\D/g, '').slice(-10);
 
     const listParams = {
       Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -305,16 +305,24 @@ router.get("/get-recordings-by-number", auth, async (req, res) => {
       );
     }).map(obj => {
       const key = obj.Key.replace(prefix, "");
+
       const match = key.match(/_([0-9]{14})\.mp3$/);
       const parsedTimestamp = match
         ? new Date(`${match[1].slice(0, 4)}-${match[1].slice(4, 6)}-${match[1].slice(6, 8)}T${match[1].slice(8, 10)}:${match[1].slice(10, 12)}:${match[1].slice(12, 14)}Z`)
         : obj.LastModified;
+
+      const signedUrl = s3.getSignedUrl("getObject", {
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
+        Key: obj.Key,
+        Expires: 3600,
+      });
 
       return {
         filename: key,
         recordingTimestamp: parsedTimestamp,
         s3Timestamp: obj.LastModified,
         key: obj.Key,
+        url: signedUrl,
       };
     });
 
