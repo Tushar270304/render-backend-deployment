@@ -278,10 +278,10 @@ router.get("/get-closest-recording", auth, async (req, res) => {
   if (!number || !timestamp) {
     return res.status(400).json({ success: false, message: "Missing number or timestamp" });
   }
+
+  const normalizedNumber = number.replace(/\D/g, '').slice(-10);
+  const expectedTime = new Date(Number(timestamp));
   
-  const normalizedNumber = number.replace(/\D/g, '').slice(-10); // 10-digit number
-  const expectedTime = new Date(Number(timestamp)); // timestamp in milliseconds
-  console.log(expectedTime);
   const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -289,49 +289,55 @@ router.get("/get-closest-recording", auth, async (req, res) => {
     signatureVersion: "v4",
   });
 
-  const prefix = `mobile_recordings/`;
-
   const listParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Prefix: prefix,
+    Prefix: 'mobile_recordings/',
   };
 
-  const data = await s3.listObjectsV2(listParams).promise();
+  try {
+    const data = await s3.listObjectsV2(listParams).promise();
 
-  const matched = data.Contents
-    .filter(obj => obj.Key.includes(`(${normalizedNumber})`))
-    .map(obj => {
-      const key = obj.Key;
-      const match = key.match(/_([0-9]{14})\.mp3$/);
-      if (!match) return null;
+    const matchedFiles = data.Contents
+      .filter(obj => obj.Key.includes(`(${normalizedNumber})`))
+      .map(obj => {
+        const key = obj.Key;
+        const match = key.match(/_([0-9]{14})\.mp3$/);
+        if (!match) return null;
 
-      const timeStr = match[1];
-      const fileDate = new Date(`${timeStr.slice(0,4)}-${timeStr.slice(4,6)}-${timeStr.slice(6,8)}T${timeStr.slice(8,10)}:${timeStr.slice(10,12)}:${timeStr.slice(12,14)}Z`);
-      const diff = Math.abs(fileDate.getTime() - expectedTime.getTime());
+        const timeStr = match[1];
+        let fileDate = new Date(`${timeStr.slice(0,4)}-${timeStr.slice(4,6)}-${timeStr.slice(6,8)}T${timeStr.slice(8,10)}:${timeStr.slice(10,12)}:${timeStr.slice(12,14)}Z`);
+        
+        // 👇 **THE FIX IS HERE** 👇
+        // Assume the filename is in IST and convert it to UTC by subtracting 5.5 hours.
+        const istOffsetMs = 5.5 * 60 * 60 * 1000;
+        fileDate = new Date(fileDate.getTime() - istOffsetMs);
 
-      return {
-        key,
-        fileDate,
-        diff,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.diff - b.diff);
+        const diff = Math.abs(fileDate.getTime() - expectedTime.getTime());
 
-  if (matched.length === 0 || matched[0].diff > 600000) { // 30 seconds
-    return res.status(404).json({ success: false, message: "No close match found" });
+        return { key, fileDate, diff };
+      })
+      .filter(Boolean) // Remove any nulls from non-matching filenames
+      .sort((a, b) => a.diff - b.diff);
+
+    if (matchedFiles.length === 0 || matchedFiles[0].diff > 600000) { // 10-minute threshold
+      return res.status(404).json({ success: false, message: "No close match found" });
+    }
+
+    const closestFileKey = matchedFiles[0].key;
+    const signedUrl = await s3.getSignedUrlPromise("getObject", {
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: closestFileKey,
+      Expires: 60 * 5, // 5 minutes
+    });
+
+    res.json({ success: true, url: signedUrl });
+
+  } catch (err) {
+    console.error("❌ Error in get-closest-recording:", err);
+    res.status(500).json({ success: false, message: "Server error while processing S3 files" });
   }
-
-  const closestFileKey = matched[0].key;
-
-  const signedUrl = await s3.getSignedUrlPromise("getObject", {
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: closestFileKey,
-    Expires: 60 * 5,
-  });
-
-  res.json({ success: true, url: signedUrl });
 });
+
 
 
 
