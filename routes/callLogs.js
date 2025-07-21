@@ -272,65 +272,65 @@ router.get("/get-recording-url", auth, async (req, res) => {
   }
 });
 
-router.get("/get-recordings-by-number", auth, async (req, res) => {
-  try {
-    const { number } = req.query;
+router.get("/get-closest-recording", auth, async (req, res) => {
+  const { number, timestamp } = req.query;
 
-    if (!number) {
-      return res.status(400).json({ success: false, message: "Missing number" });
-    }
+  if (!number || !timestamp) {
+    return res.status(400).json({ success: false, message: "Missing number or timestamp" });
+  }
 
-    const s3 = new AWS.S3({
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      region: process.env.AWS_REGION,
-      signatureVersion: "v4",
-    });
+  const normalizedNumber = number.replace(/\D/g, '').slice(-10); // 10-digit number
+  const expectedTime = new Date(Number(timestamp)); // timestamp in milliseconds
 
-    const prefix = `mobile_recordings/`;
-    const normalizedNumber = number.replace(/\D/g, '').slice(-10);
+  const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+    signatureVersion: "v4",
+  });
 
-    const listParams = {
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
-      Prefix: prefix,
-    };
+  const prefix = `mobile_recordings/`;
 
-    const data = await s3.listObjectsV2(listParams).promise();
+  const listParams = {
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Prefix: prefix,
+  };
 
-    const matched = data.Contents.filter(obj => {
-      const key = obj.Key.toLowerCase();
-      return (
-        key.includes(`(0091${normalizedNumber})`) ||
-        key.includes(`(${normalizedNumber})`)
-      );
-    }).map(obj => {
-      const key = obj.Key.replace(prefix, "");
+  const data = await s3.listObjectsV2(listParams).promise();
 
+  const matched = data.Contents
+    .filter(obj => obj.Key.includes(`(${normalizedNumber})`))
+    .map(obj => {
+      const key = obj.Key;
       const match = key.match(/_([0-9]{14})\.mp3$/);
-      const parsedTimestamp = match
-        ? new Date(`${match[1].slice(0, 4)}-${match[1].slice(4, 6)}-${match[1].slice(6, 8)}T${match[1].slice(8, 10)}:${match[1].slice(10, 12)}:${match[1].slice(12, 14)}Z`)
-        : obj.LastModified;
+      if (!match) return null;
 
-      const signedUrl = s3.getSignedUrl("getObject", {
-        Bucket: process.env.AWS_S3_BUCKET_NAME,
-        Key: obj.Key,
-        Expires: 3600,
-      });
+      const timeStr = match[1];
+      const fileDate = new Date(`${timeStr.slice(0,4)}-${timeStr.slice(4,6)}-${timeStr.slice(6,8)}T${timeStr.slice(8,10)}:${timeStr.slice(10,12)}:${timeStr.slice(12,14)}Z`);
+      const diff = Math.abs(fileDate.getTime() - expectedTime.getTime());
 
       return {
-        filename: key,
-        recordingTimestamp: parsedTimestamp,
-        s3Timestamp: obj.LastModified,
-        key: obj.Key,
-        url: signedUrl,
+        key,
+        fileDate,
+        diff,
       };
-    });
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.diff - b.diff);
 
-    res.json({ success: true, recordings: matched });
-  } catch (err) {
-    console.error("❌ Error listing recordings:", err);
-    res.status(500).json({ success: false, message: "Failed to list recordings" });
+  if (matched.length === 0 || matched[0].diff > 30000) { // 30 seconds
+    return res.status(404).json({ success: false, message: "No close match found" });
   }
+
+  const closestFileKey = matched[0].key;
+
+  const signedUrl = await s3.getSignedUrlPromise("getObject", {
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Key: closestFileKey,
+    Expires: 60 * 5,
+  });
+
+  res.json({ success: true, url: signedUrl });
 });
 
 
