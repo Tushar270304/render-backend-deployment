@@ -318,7 +318,7 @@ router.get("/get-closest-recording", auth, async (req, res) => {
     .filter(Boolean)
     .sort((a, b) => a.diff - b.diff);
 
-  if (matched.length === 0 || matched[0].diff > 30000) { // 30 seconds
+  if (matched.length === 0 || matched[0].diff > 600000) { // 30 seconds
     return res.status(404).json({ success: false, message: "No close match found" });
   }
 
