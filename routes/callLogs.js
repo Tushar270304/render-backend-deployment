@@ -278,10 +278,10 @@ router.get("/get-closest-recording", auth, async (req, res) => {
   if (!number || !timestamp) {
     return res.status(400).json({ success: false, message: "Missing number or timestamp" });
   }
-
+  
   const normalizedNumber = number.replace(/\D/g, '').slice(-10); // 10-digit number
   const expectedTime = new Date(Number(timestamp)); // timestamp in milliseconds
-
+  console.log(expectedTime);
   const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
