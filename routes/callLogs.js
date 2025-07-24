@@ -170,10 +170,35 @@ router.put("/:id", auth, async (req, res) => {
 // Generate pre-signed URL for S3 upload
 router.get("/generate-upload-url", async (req, res) => {
   try {
-    const { filename } = req.query;
+    const { filename, phoneNumber, timestamp, deviceId } = req.query;
 
-    if (!filename) {
-      return res.status(400).json({ error: "Missing filename in query" });
+    if (!filename || !phoneNumber || !timestamp || !deviceId) {
+      return res.status(400).json({ error: "Missing required query parameters: filename, phoneNumber, timestamp, deviceId are required." });
+    }
+
+    const recordingEndTime = parseInt(timestamp, 10);
+    const normalizedNumber = phoneNumber.replace(/\D/g, ""); // Normalize the number
+
+    const candidateLog = await CallLog.findOne({
+      deviceId: deviceId,
+      clientNumber: { $regex: normalizedNumber.slice(-10), $options: "i" }, // Match last 10 digits
+      recordingFile: { $exists: false }, // Must not already be linked
+      timestamp: { $lt: new Date(recordingEndTime) }, // Call started before recording ended
+    }).sort({ timestamp: -1 }); // Get the most recent one first
+
+    if (candidateLog) {
+      const calculatedStartTime = recordingEndTime - (candidateLog.duration * 1000);
+      const timeDifference = Math.abs(candidateLog.timestamp.getTime() - calculatedStartTime);
+
+      if (timeDifference < 45000) {
+        candidateLog.recordingFile = filename;
+        await candidateLog.save();
+        console.log(`✅ Recording "${filename}" successfully linked to call log ID ${candidateLog._id}.`);
+      } else {
+        console.warn(`⚠️ Found a candidate log for "${filename}", but the duration didn't match. Time difference was ${timeDifference}ms. Not linking.`);
+      }
+    } else {
+        console.log(`ℹ️ No unlinked call log found for recording "${filename}". It will be uploaded without a link.`);
     }
 
     const s3 = new AWS.S3({
@@ -187,17 +212,19 @@ router.get("/generate-upload-url", async (req, res) => {
       Bucket: process.env.AWS_S3_BUCKET_NAME,
       Key: `mobile_recordings/${filename}`,
       Expires: 120,
-      ContentType: "audio/mpeg", // or 'audio/3gpp', based on your recordings
+      ContentType: "audio/mpeg", // Adjust if you have other formats like .m4a
     };
 
     const uploadURL = await s3.getSignedUrlPromise("putObject", params);
 
     res.json({ uploadURL });
+
   } catch (err) {
-    console.error("Error generating signed URL:", err);
-    res.status(500).json({ error: "Failed to generate signed URL" });
+    console.error("❌ Error generating signed URL or linking recording:", err);
+    res.status(500).json({ error: "Failed to process recording upload request." });
   }
 });
+
 
 // ✅ PUT: Update status of most recent log for given deviceId and clientNumber
 router.put("/update-latest", async (req, res) => {
