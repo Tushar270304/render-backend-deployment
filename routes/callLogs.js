@@ -156,54 +156,67 @@ router.put("/:id", auth, async (req, res) => {
 // --- S3 & RECORDING ROUTES ---
 
 router.get("/generate-upload-url", auth, async (req, res) => {
-    const { filename, phoneNumber, timestamp, deviceId } = req.query;
-    if (!filename || !phoneNumber || !timestamp || !deviceId) {
-      return res.status(400).json({ error: "Missing required query parameters." });
+  const { filename, phoneNumber, timestamp, deviceId } = req.query;
+  if (!filename || !phoneNumber || !timestamp || !deviceId) {
+    return res.status(400).json({ error: "Missing required query parameters." });
+  }
+  try {
+    const recordingEndTime = parseInt(timestamp, 10);
+    const normalizedNumber = phoneNumber.replace(/\D/g, "");
+    
+    // ✅ 1. Variable to hold the ID of the linked log
+    let linkedCallLogId = null; 
+
+    const candidateLog = await CallLog.findOne({
+      deviceId: deviceId,
+      clientNumber: { $regex: normalizedNumber.slice(-10), $options: "i" },
+      recordingFile: { $exists: false },
+      timestamp: { $lt: new Date(recordingEndTime) },
+    }).sort({ timestamp: -1 });
+
+    if (candidateLog) {
+      const calculatedStartTime = recordingEndTime - (candidateLog.duration * 1000);
+      const timeDifference = Math.abs(candidateLog.timestamp.getTime() - calculatedStartTime);
+      if (timeDifference < 45000) {
+        candidateLog.recordingFile = filename;
+        await candidateLog.save();
+        
+        // ✅ 2. Store the ID after a successful link
+        linkedCallLogId = candidateLog._id; 
+        
+        console.log(`✅ Recording "${filename}" successfully linked to call log ID ${candidateLog._id}.`);
+      } else {
+        console.warn(`⚠️ Duration mismatch for "${filename}". Not linking.`);
+      }
+    } else {
+      console.log(`ℹ️ No unlinked call log found for recording "${filename}".`);
     }
-    try {
-        const recordingEndTime = parseInt(timestamp, 10);
-        const normalizedNumber = phoneNumber.replace(/\D/g, "");
 
-        const candidateLog = await CallLog.findOne({
-            deviceId: deviceId,
-            clientNumber: { $regex: normalizedNumber.slice(-10), $options: "i" },
-            recordingFile: { $exists: false },
-            timestamp: { $lt: new Date(recordingEndTime) },
-        }).sort({ timestamp: -1 });
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.AWS_REGION,
+      signatureVersion: "v4",
+    });
 
-        if (candidateLog) {
-            const calculatedStartTime = recordingEndTime - (candidateLog.duration * 1000);
-            const timeDifference = Math.abs(candidateLog.timestamp.getTime() - calculatedStartTime);
-            if (timeDifference < 45000) {
-                candidateLog.recordingFile = filename;
-                await candidateLog.save();
-                console.log(`✅ Recording "${filename}" successfully linked to call log ID ${candidateLog._id}.`);
-            } else {
-                console.warn(`⚠️ Duration mismatch for "${filename}". Not linking.`);
-            }
-        } else {
-            console.log(`ℹ️ No unlinked call log found for recording "${filename}".`);
-        }
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: `mobile_recordings/${filename}`,
+      Expires: 120,
+      ContentType: "audio/mpeg",
+    };
+    const uploadURL = await s3.getSignedUrlPromise("putObject", params);
+    
+    // ✅ 3. Include the new 'linkedCallLogId' field in the JSON response
+    res.json({ 
+      uploadURL, 
+      linkedCallLogId 
+    });
 
-        const s3 = new AWS.S3({
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-            region: process.env.AWS_REGION,
-            signatureVersion: "v4",
-        });
-
-        const params = {
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key: `mobile_recordings/${filename}`,
-            Expires: 120,
-            ContentType: "audio/mpeg",
-        };
-        const uploadURL = await s3.getSignedUrlPromise("putObject", params);
-        res.json({ uploadURL });
-    } catch (err) {
-        console.error("❌ Error in /generate-upload-url:", err);
-        res.status(500).json({ error: "Failed to process request." });
-    }
+  } catch (err) {
+    console.error("❌ Error in /generate-upload-url:", err);
+    res.status(500).json({ error: "Failed to process request." });
+  }
 });
 
 
