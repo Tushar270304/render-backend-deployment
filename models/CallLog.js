@@ -9,6 +9,8 @@ const callLogSchema = new mongoose.Schema({
   timestamp: Date,
   location: String,
   status: String, // Follow Up, Interested, etc.
+  recordingFile: String, // The field we are adding
+
 });
 
 module.exports = mongoose.model('CallLog', callLogSchema);
