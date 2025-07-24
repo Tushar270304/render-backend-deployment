@@ -226,8 +226,8 @@ router.get("/generate-upload-url", async (req, res) => {
 });
 
 
-// ✅ PUT: Update status of most recent log for given deviceId and clientNumber
-router.put("/update-latest", async (req, res) => {
+// ✅ Use the 'auth' middleware to protect the route
+router.put("/update-latest", auth, async (req, res) => {
   try {
     const { deviceId, clientNumber, status } = req.body;
 
@@ -238,36 +238,38 @@ router.put("/update-latest", async (req, res) => {
       });
     }
 
-    // Normalize number (last 10 digits)
     const normalizedNumber = clientNumber.replace(/\D/g, "").slice(-10);
 
-    // Find the most recent matching log
     const latestLog = await CallLog.findOne({
       deviceId,
       clientNumber: { $regex: normalizedNumber, $options: "i" },
-    })
-      .sort({ timestamp: -1 });
+    }).sort({ timestamp: -1 });
 
+    // ✅ THIS IS THE FIX: Check if a log was actually found before updating.
     if (!latestLog) {
+      // If no log is found, return a 404 error instead of crashing.
       return res.status(404).json({
         success: false,
-        message: "No matching log found",
+        message: "No matching log found to update.",
       });
     }
 
+    // If a log is found, update its status and save it.
     latestLog.status = status;
     await latestLog.save();
 
     res.json({
       success: true,
-      message: "Status updated for most recent log",
+      message: "Status updated for the most recent log.",
       data: latestLog,
     });
+
   } catch (err) {
     console.error("❌ Error updating latest status:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 router.get("/get-recording-url", auth, async (req, res) => {
   try {
