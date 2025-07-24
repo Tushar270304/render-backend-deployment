@@ -154,7 +154,6 @@ router.put("/:id", auth, async (req, res) => {
 
 
 // --- S3 & RECORDING ROUTES ---
-
 router.get("/generate-upload-url", auth, async (req, res) => {
   const { filename, phoneNumber, timestamp, deviceId } = req.query;
   if (!filename || !phoneNumber || !timestamp || !deviceId) {
@@ -163,10 +162,9 @@ router.get("/generate-upload-url", auth, async (req, res) => {
   try {
     const recordingEndTime = parseInt(timestamp, 10);
     const normalizedNumber = phoneNumber.replace(/\D/g, "");
-    
-    // ✅ 1. Variable to hold the ID of the linked log
-    let linkedCallLogId = null; 
+    let linkedCallLogId = null;
 
+    // Find the most recent, unlinked call log that matches the criteria
     const candidateLog = await CallLog.findOne({
       deviceId: deviceId,
       clientNumber: { $regex: normalizedNumber.slice(-10), $options: "i" },
@@ -177,14 +175,19 @@ router.get("/generate-upload-url", auth, async (req, res) => {
     if (candidateLog) {
       const calculatedStartTime = recordingEndTime - (candidateLog.duration * 1000);
       const timeDifference = Math.abs(candidateLog.timestamp.getTime() - calculatedStartTime);
+
       if (timeDifference < 45000) {
-        candidateLog.recordingFile = filename;
-        await candidateLog.save();
-        
-        // ✅ 2. Store the ID after a successful link
-        linkedCallLogId = candidateLog._id; 
-        
-        console.log(`✅ Recording "${filename}" successfully linked to call log ID ${candidateLog._id}.`);
+        // ✅ UPDATED LOGIC: Use findByIdAndUpdate for a direct update.
+        const updatedLog = await CallLog.findByIdAndUpdate(
+          candidateLog._id, // The ID of the document to update
+          { recordingFile: filename }, // The update operation
+          { new: true } // This option returns the modified document
+        );
+
+        if (updatedLog) {
+          linkedCallLogId = updatedLog._id;
+          console.log(`✅ Recording "${filename}" successfully linked to call log ID ${updatedLog._id}.`);
+        }
       } else {
         console.warn(`⚠️ Duration mismatch for "${filename}". Not linking.`);
       }
@@ -207,11 +210,7 @@ router.get("/generate-upload-url", auth, async (req, res) => {
     };
     const uploadURL = await s3.getSignedUrlPromise("putObject", params);
     
-    // ✅ 3. Include the new 'linkedCallLogId' field in the JSON response
-    res.json({ 
-      uploadURL, 
-      linkedCallLogId 
-    });
+    res.json({ uploadURL, linkedCallLogId });
 
   } catch (err) {
     console.error("❌ Error in /generate-upload-url:", err);
